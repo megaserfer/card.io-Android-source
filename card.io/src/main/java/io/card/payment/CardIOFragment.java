@@ -1,12 +1,8 @@
 package io.card.payment;
 
-/* CardIOActivity.java
- * See the file "LICENSE.md" for the full license governing this code.
- */
-
 import android.Manifest;
-import android.app.ActionBar;
 import android.app.Activity;
+import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -18,7 +14,6 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.hardware.SensorManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Vibrator;
@@ -28,9 +23,8 @@ import android.view.LayoutInflater;
 import android.view.OrientationEventListener;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
-import android.view.Window;
-import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.view.animation.RotateAnimation;
 import android.widget.Button;
@@ -40,22 +34,21 @@ import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Constructor;
 import java.util.Date;
 
 import io.card.payment.i18n.LocalizedStrings;
 import io.card.payment.i18n.StringKey;
-import io.card.payment.ui.ActivityHelper;
 import io.card.payment.ui.Appearance;
 import io.card.payment.ui.ViewUtil;
 
+import static android.app.Activity.RESULT_CANCELED;
 /**
- * This is the entry point {@link android.app.Activity} for a card.io client to use <a
- * href="https://card.io">card.io</a>.
- *
- * @version 1.0
+ * Created by Serfer on 08.09.2018.
  */
-public final class CardIOActivity extends Activity implements CardIOScanDetection, CardIOCameraControl {
+
+public final class CardIOFragment extends Fragment implements CardIOScanDetection, CardIOCameraControl  {
     /**
      * Boolean extra. Optional. Defaults to <code>false</code>. If set, the card will not be scanned
      * with the camera.
@@ -323,7 +316,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     // ------------------------------------------------------------------------
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         numActivityAllocations++;
@@ -337,38 +330,21 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
                     numActivityAllocations));
         }
 
-        final Intent clientData = this.getIntent();
+        final Bundle clientData = getArguments();
 
-        useApplicationTheme = getIntent().getBooleanExtra(CardIOActivity.EXTRA_KEEP_APPLICATION_THEME, false);
-        ActivityHelper.setActivityTheme(this, useApplicationTheme);
-
-        LocalizedStrings.setLanguage(clientData);
+//        LocalizedStrings.setLanguage(getArguments());
 
         // Validate app's manifest is correct.
-        mDetectOnly = clientData.getBooleanExtra(EXTRA_SUPPRESS_SCAN, false);
+        mDetectOnly = clientData.getBoolean(EXTRA_SUPPRESS_SCAN, false);
 
-        ResolveInfo resolveInfo;
-        String errorMsg;
-
-        // Check for DataEntryActivity's portrait orientation
-
-        // Check for CardIOActivity's orientation config in manifest
-        resolveInfo = getPackageManager().resolveActivity(clientData,
-                PackageManager.MATCH_DEFAULT_ONLY);
-        errorMsg = Util.manifestHasConfigChange(resolveInfo, CardIOActivity.class);
-        if (errorMsg != null) {
-            throw new RuntimeException(errorMsg); // Throw the actual exception from this class, for
-            // clarity.
-        }
-
-        suppressManualEntry = clientData.getBooleanExtra(EXTRA_SUPPRESS_MANUAL_ENTRY, false);
+        suppressManualEntry = clientData.getBoolean(EXTRA_SUPPRESS_MANUAL_ENTRY, false);
 
 
         if (savedInstanceState != null) {
             waitingForPermission = savedInstanceState.getBoolean(BUNDLE_WAITING_FOR_PERMISSION);
         }
 
-        if (clientData.getBooleanExtra(EXTRA_NO_CAMERA, false)) {
+        if (clientData.getBoolean(EXTRA_NO_CAMERA, false)) {
             Log.i(Util.PUBLIC_LOG_TAG, "EXTRA_NO_CAMERA set to true. Skipping camera.");
             manualEntryFallbackOrForced = true;
         } else if (!CardScanner.processorSupported()){
@@ -377,9 +353,9 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         } else {
             try {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    if (!waitingForPermission) {
-                        if (checkSelfPermission(Manifest.permission.CAMERA) ==
-                                PackageManager.PERMISSION_DENIED) {
+                    if(!waitingForPermission) {
+                        if (getActivity().checkSelfPermission(Manifest.permission.CAMERA)
+                                == PackageManager.PERMISSION_DENIED) {
 
                             Log.d(TAG, "permission denied to camera - requesting it");
                             String[] permissions = {Manifest.permission.CAMERA};
@@ -398,7 +374,11 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
                 handleGeneralExceptionError(e);
             }
         }
+    }
 
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        return mMainLayout;
     }
 
     private void android23AndAboveHandleCamera() {
@@ -415,9 +395,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         if (manualEntryFallbackOrForced) {
             finishIfSuppressManualEntry();
         } else {
-            // guaranteed to be called in onCreate on API < 22, so it's ok that we're removing the window feature here
-            requestWindowFeature(Window.FEATURE_NO_TITLE);
-
             showCameraScannerOverlay();
         }
     }
@@ -426,7 +403,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     private void finishIfSuppressManualEntry() {
         if (suppressManualEntry) {
             Log.i(Util.PUBLIC_LOG_TAG, "Camera not available and manual entry suppressed.");
-            setResultAndFinish(RESULT_SCAN_NOT_AVAILABLE, null);
         }
     }
 
@@ -443,7 +419,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
             String localizedError = LocalizedStrings.getString(errorKey);
 
             Log.e(Util.PUBLIC_LOG_TAG, errorKey + ": " + localizedError);
-            Toast toast = Toast.makeText(this, localizedError, Toast.LENGTH_LONG);
+            Toast toast = Toast.makeText(getActivity(), localizedError, Toast.LENGTH_LONG);
             toast.setGravity(Gravity.CENTER, 0, TOAST_OFFSET_Y);
             toast.show();
             manualEntryFallbackOrForced = true;
@@ -451,26 +427,13 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     }
 
     private void showCameraScannerOverlay() {
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-            View decorView = getWindow().getDecorView();
-            // Hide the status bar.
-            int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-            decorView.setSystemUiVisibility(uiOptions);
-            // Remember that you should never show the action bar if the
-            // status bar is hidden, so hide that too if necessary.
-            ActionBar actionBar = getActionBar();
-            if (null != actionBar) {
-                actionBar.hide();
-            }
-        }
-
         try {
             mGuideFrame = new Rect();
 
             mFrameOrientation = ORIENTATION_PORTRAIT;
 
-            if (getIntent().getBooleanExtra(PRIVATE_EXTRA_CAMERA_BYPASS_TEST_MODE, false)) {
-                if (!this.getPackageName().contentEquals("io.card.development")) {
+            if (getArguments().getBoolean(PRIVATE_EXTRA_CAMERA_BYPASS_TEST_MODE, false)) {
+                if (!getActivity().getPackageName().contentEquals("io.card.development")) {
                     throw new IllegalStateException("Illegal access of private extra");
                 }
                 // use reflection here so that the tester can be safely stripped for release
@@ -487,7 +450,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
 
             setPreviewLayout();
 
-            orientationListener = new OrientationEventListener(this,
+            orientationListener = new OrientationEventListener(getActivity(),
                     SensorManager.SENSOR_DELAY_UI) {
                 @Override
                 public void onOrientationChanged(int orientation) {
@@ -505,7 +468,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         String localizedError = LocalizedStrings.getString(errorKey);
 
         Log.e(Util.PUBLIC_LOG_TAG, "Unknown exception, please post the stack trace as a GitHub issue", e);
-        Toast toast = Toast.makeText(this, localizedError, Toast.LENGTH_LONG);
+        Toast toast = Toast.makeText(getActivity(), localizedError, Toast.LENGTH_LONG);
         toast.setGravity(Gravity.CENTER, 0, TOAST_OFFSET_Y);
         toast.show();
         manualEntryFallbackOrForced = true;
@@ -558,29 +521,25 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
      * same buffer for preview callbacks to greatly reduce the amount of required GC).
      */
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
 
-        if (!waitingForPermission) {
+        if(!waitingForPermission) {
             if (manualEntryFallbackOrForced) {
-                    nextActivity();
-                    return;
+                Log.e(TAG, "onResume: ", new Exception("Manual entry fallback!"));
+                return;
             }
 
             Util.logNativeMemoryStats();
 
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            ActivityHelper.setFlagSecure(this);
 
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             orientationListener.enable();
 
             if (!restartPreview()) {
                 Log.e(TAG, "Could not connect to camera.");
                 StringKey error = StringKey.ERROR_CAMERA_UNEXPECTED_FAIL;
                 showErrorMessage(LocalizedStrings.getString(error));
-                nextActivity();
             } else {
                 // Turn flash off
                 setFlashOn(false);
@@ -591,14 +550,14 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
+    public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
         outState.putBoolean(BUNDLE_WAITING_FOR_PERMISSION, waitingForPermission);
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
 
         if (orientationListener != null) {
@@ -612,7 +571,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         mOverlay = null;
         numActivityAllocations--;
 
@@ -644,12 +603,12 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
         switch (requestCode) {
             case DATA_ENTRY_REQUEST_ID:
-                if (resultCode == RESULT_ENTRY_CANCELED) {
+                if (resultCode == RESULT_CANCELED) {
                     Log.d(TAG, "ignoring onActivityResult(RESULT_CANCELED) caused only when Camera Permissions are Denied in Android 23");
                 } else if (resultCode == RESULT_CARD_INFO || resultCode == RESULT_ENTRY_CANCELED
                         || manualEntryFallbackOrForced) {
@@ -658,7 +617,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
                     } else {
                         Log.d(TAG, "no data in EXTRA_SCAN_RESULT");
                     }
-                    setResultAndFinish(resultCode, data);
 
                 } else {
                     if (mUIBar != null) {
@@ -666,25 +624,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
                     }
                 }
                 break;
-        }
-    }
-
-    /**
-     * This {@link android.app.Activity} overrides back button handling to handle back presses properly given the
-     * various states this {@link android.app.Activity} can be in.
-     * <br><br>
-     * This method is called by Android, never directly by application code.
-     */
-    @Override
-    public void onBackPressed() {
-        if (!manualEntryFallbackOrForced && mOverlay.isAnimating()) {
-            try {
-                restartPreview();
-            } catch (RuntimeException re) {
-                Log.w(TAG, "*** could not return to preview: " + re);
-            }
-        } else if (mCardScanner != null) {
-            super.onBackPressed();
         }
     }
 
@@ -711,22 +650,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         }
     }
 
-    /**
-     * Returns the String version of this SDK.  Please include the return value of this method in any support requests.
-     *
-     * @return The String version of this SDK
-     */
-    public static String sdkVersion() {
-        return BuildConfig.VERSION_NAME;
-    }
 
-    /**
-     * @deprecated Always returns {@code new Date()}.
-     */
-    @Deprecated
-    public static Date sdkBuildDate() {
-        return new Date();
-    }
 
     /**
      * Utility method for decoding card bitmap
@@ -746,12 +670,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     }
 
     // end static
-
-    @Override
-    public Activity getActivity() {
-        return this;
-    }
-
 
     public void onFirstFrame(int orientation) {
         SurfaceView sv = mPreview.getSurfaceView();
@@ -775,7 +693,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
 
     public void onCardDetected(Bitmap detectedBitmap, DetectionInfo dInfo) {
         try {
-            Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            Vibrator vibrator = (Vibrator) getActivity().getSystemService(Context.VIBRATOR_SERVICE);
             vibrator.vibrate(VIBRATE_PATTERN, -1);
         } catch (SecurityException e) {
             Log.e(Util.PUBLIC_LOG_TAG,
@@ -807,66 +725,13 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
                 detectedBitmap.getHeight(), m, false);
         mOverlay.setBitmap(scaledCard);
 
-        if (mDetectOnly) {
-            Intent dataIntent = new Intent();
-            Util.writeCapturedCardImageIfNecessary(getIntent(), dataIntent, mOverlay);
-
-            setResultAndFinish(RESULT_SCAN_SUPPRESSED, dataIntent);
-        } else {
-            nextActivity();
-        }
+        displayBitmap(dInfo);
     }
 
-    private void nextActivity() {
-        final Intent origIntent = getIntent();
-        if (origIntent != null && origIntent.getBooleanExtra(EXTRA_SUPPRESS_CONFIRMATION, false)) {
-            Intent dataIntent = new Intent(CardIOActivity.this, DataEntryActivity.class);
-            if (mDetectedCard != null) {
-                dataIntent.putExtra(EXTRA_SCAN_RESULT, mDetectedCard);
-                mDetectedCard = null;
-            }
-
-            Util.writeCapturedCardImageIfNecessary(origIntent, dataIntent, mOverlay);
-
-            setResultAndFinish(RESULT_CONFIRMATION_SUPPRESSED, dataIntent);
-        } else {
-            new Handler().post(new Runnable() {
-                @Override
-                public void run() {
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-
-                    Intent dataIntent = new Intent(CardIOActivity.this, DataEntryActivity.class);
-                    Util.writeCapturedCardImageIfNecessary(origIntent, dataIntent, mOverlay);
-
-                    if (mOverlay != null) {
-                        mOverlay.markupCard();
-                        if (markedCardImage != null && !markedCardImage.isRecycled()) {
-                            markedCardImage.recycle();
-                        }
-                        markedCardImage = mOverlay.getCardImage();
-                    }
-                    if (mDetectedCard != null) {
-                        dataIntent.putExtra(EXTRA_SCAN_RESULT, mDetectedCard);
-                        mDetectedCard = null;
-                    } else {
-                        /*
-                         add extra to indicate manual entry.
-                         This can obviously be indicated by the presence of EXTRA_SCAN_RESULT.
-                         The purpose of this is to ensure there's always an extra in the DataEntryActivity.
-                         If there are no extras received by DataEntryActivity, then an error has occurred.
-                         */
-                        dataIntent.putExtra(EXTRA_MANUAL_ENTRY_RESULT, true);
-                    }
-
-                    dataIntent.putExtras(getIntent()); // passing on any received params (such as isCvv
-                    // and language)
-                    dataIntent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
-                            | Intent.FLAG_ACTIVITY_NO_HISTORY | Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                    startActivityForResult(dataIntent, DATA_ENTRY_REQUEST_ID);
-                }
-            });
-        }
+    private void displayBitmap(DetectionInfo dInfo) {
+        Toast.makeText(getActivity(), dInfo.detectedCard.cardNumber, Toast.LENGTH_SHORT).show();
+//        ByteArrayOutputStream scaledCardBytes = new ByteArrayOutputStream();
+//        mOverlay.getBitmap().compress(Bitmap.CompressFormat.JPEG, 80, scaledCardBytes);
     }
 
 
@@ -875,7 +740,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
      */
     private void showErrorMessage(final String msgStr) {
         Log.e(Util.PUBLIC_LOG_TAG, "error display: " + msgStr);
-        Toast toast = Toast.makeText(CardIOActivity.this, msgStr, Toast.LENGTH_LONG);
+        Toast toast = Toast.makeText(getActivity(), msgStr, Toast.LENGTH_LONG);
         toast.show();
     }
 
@@ -896,6 +761,8 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         sv = mPreview.getSurfaceView();
 
         if (sv == null) {
+            Log.wtf(Util.PUBLIC_LOG_TAG,
+                    "surface view is null.. recovering... rotation might be weird.");
             return;
         }
 
@@ -931,41 +798,44 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     private void setPreviewLayout() {
 
         // top level container
-        mMainLayout = new FrameLayout(this);
+        mMainLayout = new FrameLayout(getActivity());
         mMainLayout.setBackgroundColor(Color.BLACK);
         mMainLayout.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT));
 
-        FrameLayout previewFrame = new FrameLayout(this);
+        FrameLayout previewFrame = new FrameLayout(getActivity());
         previewFrame.setId(FRAME_ID);
 
-        mPreview = new Preview(this, null, mCardScanner.mPreviewWidth, mCardScanner.mPreviewHeight);
+        mPreview = new Preview(getActivity(), null, mCardScanner.mPreviewWidth, mCardScanner.mPreviewHeight);
         mPreview.setLayoutParams(new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT, Gravity.TOP));
         previewFrame.addView(mPreview);
 
-        mOverlay = new OverlayView(this, this,null, Util.deviceSupportsTorch(this));
+        mOverlay = new OverlayView(getActivity(), this, null, Util.deviceSupportsTorch(getActivity()));
         mOverlay.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT));
-        if (getIntent() != null) {
-            boolean useCardIOLogo = getIntent().getBooleanExtra(EXTRA_USE_CARDIO_LOGO, false);
+        if (getArguments() != null) {
+            boolean useCardIOLogo = getArguments().getBoolean(EXTRA_USE_CARDIO_LOGO, false);
             mOverlay.setUseCardIOLogo(useCardIOLogo);
 
-            int color = getIntent().getIntExtra(EXTRA_GUIDE_COLOR, 0);
+            int color = getArguments().getInt(EXTRA_GUIDE_COLOR, 0);
 
             if (color != 0) {
                 // force 100% opaque guide colors.
                 int alphaRemovedColor = color | 0xFF000000;
+                if (color != alphaRemovedColor) {
+                    Log.w(Util.PUBLIC_LOG_TAG, "Removing transparency from provided guide color.");
+                }
                 mOverlay.setGuideColor(alphaRemovedColor);
             } else {
                 // default to greeeeeen
                 mOverlay.setGuideColor(Color.GREEN);
             }
 
-            boolean hideCardIOLogo = getIntent().getBooleanExtra(EXTRA_HIDE_CARDIO_LOGO, false);
+            boolean hideCardIOLogo = getArguments().getBoolean(EXTRA_HIDE_CARDIO_LOGO, false);
             mOverlay.setHideCardIOLogo(hideCardIOLogo);
 
-            String scanInstructions = getIntent().getStringExtra(EXTRA_SCAN_INSTRUCTIONS);
+            String scanInstructions = getArguments().getString(EXTRA_SCAN_INSTRUCTIONS);
             if (scanInstructions != null) {
                 mOverlay.setScanInstructions(scanInstructions);
             }
@@ -980,7 +850,7 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         previewParams.addRule(RelativeLayout.ABOVE, UIBAR_ID);
         mMainLayout.addView(previewFrame, previewParams);
 
-        mUIBar = new RelativeLayout(this);
+        mUIBar = new RelativeLayout(getActivity());
         mUIBar.setGravity(Gravity.BOTTOM);
         RelativeLayout.LayoutParams mUIBarParams = new RelativeLayout.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
@@ -990,36 +860,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         mUIBar.setId(UIBAR_ID);
 
         mUIBar.setGravity(Gravity.BOTTOM | Gravity.RIGHT);
-
-        // Show the keyboard button
-        if (!suppressManualEntry) {
-            Button keyboardBtn = new Button(this);
-            keyboardBtn.setId(KEY_BTN_ID);
-            keyboardBtn.setText(LocalizedStrings.getString(StringKey.KEYBOARD));
-            keyboardBtn.setOnClickListener(new Button.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    nextActivity();
-                }
-            });
-            mUIBar.addView(keyboardBtn);
-            ViewUtil.styleAsButton(keyboardBtn, false, this, useApplicationTheme);
-            if(!useApplicationTheme){
-                keyboardBtn.setTextSize(Appearance.TEXT_SIZE_SMALL_BUTTON);
-            }
-            keyboardBtn.setMinimumHeight(ViewUtil.typedDimensionValueToPixelsInt(
-                    Appearance.SMALL_BUTTON_HEIGHT, this));
-            RelativeLayout.LayoutParams keyboardParams = (RelativeLayout.LayoutParams) keyboardBtn
-                    .getLayoutParams();
-            keyboardParams.width = LayoutParams.WRAP_CONTENT;
-            keyboardParams.height = LayoutParams.WRAP_CONTENT;
-            keyboardParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-            ViewUtil.setPadding(keyboardBtn, Appearance.CONTAINER_MARGIN_HORIZONTAL, null,
-                    Appearance.CONTAINER_MARGIN_HORIZONTAL, null);
-            ViewUtil.setMargins(keyboardBtn, Appearance.BASE_SPACING, Appearance.BASE_SPACING,
-                    Appearance.BASE_SPACING, Appearance.BASE_SPACING);
-
-        }
         // Device has a flash, show the flash button
         RelativeLayout.LayoutParams uiParams = new RelativeLayout.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
@@ -1029,26 +869,24 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
         uiParams.setMargins(0, uiBarMarginPx, 0, uiBarMarginPx);
         mMainLayout.addView(mUIBar, uiParams);
 
-        if (getIntent() != null) {
+        if (getArguments() != null) {
             if (customOverlayLayout != null) {
                 mMainLayout.removeView(customOverlayLayout);
                 customOverlayLayout = null;
             }
 
-            int resourceId = getIntent().getIntExtra(EXTRA_SCAN_OVERLAY_LAYOUT_ID, -1);
+            int resourceId = getArguments().getInt(EXTRA_SCAN_OVERLAY_LAYOUT_ID, -1);
             if (resourceId != -1) {
-                customOverlayLayout = new LinearLayout(this);
+                customOverlayLayout = new LinearLayout(getActivity());
                 customOverlayLayout.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT,
                         LayoutParams.MATCH_PARENT));
 
-                LayoutInflater inflater = this.getLayoutInflater();
+                LayoutInflater inflater = this.getActivity().getLayoutInflater();
 
                 inflater.inflate(resourceId, customOverlayLayout);
                 mMainLayout.addView(customOverlayLayout);
             }
         }
-
-        this.setContentView(mMainLayout);
     }
 
     private void rotateCustomOverlay(float degrees) {
@@ -1063,12 +901,6 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
 
             customOverlayLayout.setAnimation(an);
         }
-    }
-
-    private void setResultAndFinish(final int resultCode, final Intent data) {
-        setResult(resultCode, data);
-        markedCardImage = null;
-        finish();
     }
 
     // for torch test
