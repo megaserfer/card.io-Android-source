@@ -563,8 +563,13 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
 
         if (!waitingForPermission) {
             if (manualEntryFallbackOrForced) {
+                if (suppressManualEntry) {
+                    finishIfSuppressManualEntry();
+                    return;
+                } else {
                     nextActivity();
                     return;
+                }
             }
 
             Util.logNativeMemoryStats();
@@ -647,25 +652,15 @@ public final class CardIOActivity extends Activity implements CardIOScanDetectio
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        switch (requestCode) {
-            case DATA_ENTRY_REQUEST_ID:
-                if (resultCode == RESULT_ENTRY_CANCELED) {
-                    Log.d(TAG, "ignoring onActivityResult(RESULT_CANCELED) caused only when Camera Permissions are Denied in Android 23");
-                } else if (resultCode == RESULT_CARD_INFO || resultCode == RESULT_ENTRY_CANCELED
-                        || manualEntryFallbackOrForced) {
-                    if (data != null && data.hasExtra(EXTRA_SCAN_RESULT)) {
-                        Log.v(TAG, "EXTRA_SCAN_RESULT: " + data.getParcelableExtra(EXTRA_SCAN_RESULT));
-                    } else {
-                        Log.d(TAG, "no data in EXTRA_SCAN_RESULT");
-                    }
-                    setResultAndFinish(resultCode, data);
-
-                } else {
-                    if (mUIBar != null) {
-                        mUIBar.setVisibility(View.VISIBLE);
-                    }
+        if (requestCode == DATA_ENTRY_REQUEST_ID) {
+            if (resultCode == RESULT_CARD_INFO || resultCode == RESULT_ENTRY_CANCELED
+                    || manualEntryFallbackOrForced) {
+                setResultAndFinish(resultCode, data);
+            } else {
+                if (mUIBar != null) {
+                    mUIBar.setVisibility(View.VISIBLE);
                 }
-                break;
+            }
         }
     }
 

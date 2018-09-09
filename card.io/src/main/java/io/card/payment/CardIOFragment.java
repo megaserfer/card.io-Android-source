@@ -445,6 +445,8 @@ public final class CardIOFragment extends Fragment implements CardIOScanDetectio
                         mFrameOrientation });
             } else {
                 mCardScanner = new CardScanner(this, mFrameOrientation, false);
+                mCardScanner.setScanExpiry(true);
+                mCardScanner.setUnblurDigits(4);
             }
             mCardScanner.prepareScanner();
 
@@ -725,7 +727,23 @@ public final class CardIOFragment extends Fragment implements CardIOScanDetectio
                 detectedBitmap.getHeight(), m, false);
         mOverlay.setBitmap(scaledCard);
 
-        displayBitmap(dInfo);
+        if (mDetectOnly) {
+            Intent dataIntent = new Intent();
+            Util.writeCapturedCardImageIfNecessary(getActivity().getIntent(), dataIntent, mOverlay);
+            setResultAndFinish(RESULT_SCAN_SUPPRESSED, dataIntent);
+        }
+
+        Intent dataIntent = new Intent();
+        dataIntent.putExtra(EXTRA_SCAN_RESULT, mDetectedCard);
+        mDetectedCard = null;
+        setResultAndFinish(RESULT_CONFIRMATION_SUPPRESSED, dataIntent);
+//        displayBitmap(dInfo);
+    }
+
+    private void setResultAndFinish(final int resultCode, final Intent data) {
+        getActivity().setResult(resultCode, data);
+        markedCardImage = null;
+        getActivity().finish();
     }
 
     private void displayBitmap(DetectionInfo dInfo) {
