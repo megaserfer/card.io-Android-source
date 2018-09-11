@@ -333,6 +333,8 @@ public final class CardIOFragment extends Fragment implements CardIOScanDetectio
         final Bundle clientData = getArguments();
 
 //        LocalizedStrings.setLanguage(getArguments());
+        final Intent intent = this.getActivity().getIntent();
+        LocalizedStrings.setLanguage(intent);
 
         // Validate app's manifest is correct.
         mDetectOnly = clientData.getBoolean(EXTRA_SUPPRESS_SCAN, false);
